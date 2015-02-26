@@ -203,6 +203,46 @@ class Remote(object):
     def remove(self, path):
         self.run(args=['rm', '-fr', path])
 
+    def has_package_installed(self, package, version=None):
+        installed_ver = None
+        if self.os.package_type == "deb":
+            proc = self.run(
+                args=[
+                    'dpkg-query', '-W', '-f', '${Version}', package
+                ],
+                stdout=StringIO(),
+            )
+        else:
+            proc = self.run(
+                args=[
+                    'rpm', '-q', package, '--qf', '%{VERSION}'
+                ],
+                stdout=StringIO(),
+            )
+        if proc.exitstatus == 0:
+            installed_ver = proc.stdout.getvalue().strip()
+            # Does this look like a version string?
+            # this assumes a version string starts with non-alpha characters
+            if installed_ver and re.match('^[^a-zA-Z]', installed_ver):
+                log.info("The installed version of {pkg} is {ver}".format(
+                    pkg=package,
+                    ver=installed_ver,
+                ))
+                if not version:
+                    return True
+                # this might be naive, but I don't know if what's returned
+                # might have the release or something in it as well
+                return version in installed_ver
+        else:
+            # should this throw an exception and stop the job?
+            log.warning(
+                "Unable determine if {pkg} is installed: {stdout}".format(
+                    pkg=package,
+                    stdout=proc.stdout.getvalue().strip(),
+                )
+            )
+            return False
+
     def put_file(self, path, dest_path, sudo=False):
         """
         Copy a local filename to a remote file
